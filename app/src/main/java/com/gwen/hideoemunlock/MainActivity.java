@@ -65,13 +65,15 @@ public class MainActivity extends AppCompatActivity {
         mSwitchMiUnlock.setChecked(hideMiUnlock);
 
         mSwitchOem.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            mPrefs.edit().putBoolean(KEY_HIDE_OEM, isChecked).apply();
+            mPrefs.edit().putBoolean(KEY_HIDE_OEM, isChecked).commit();
+            saveToDeviceProtectedStorage(KEY_HIDE_OEM, isChecked);
             makePrefsWorldReadable();
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
 
         mSwitchMiUnlock.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            mPrefs.edit().putBoolean(KEY_HIDE_MI_UNLOCK, isChecked).apply();
+            mPrefs.edit().putBoolean(KEY_HIDE_MI_UNLOCK, isChecked).commit();
+            saveToDeviceProtectedStorage(KEY_HIDE_MI_UNLOCK, isChecked);
             makePrefsWorldReadable();
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
         });
@@ -100,6 +102,15 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Root not available. Please force stop Settings manually in App Info", Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void saveToDeviceProtectedStorage(String key, boolean value) {
+        try {
+            Context deContext = createDeviceProtectedStorageContext();
+            SharedPreferences dePrefs = deContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+            dePrefs.edit().putBoolean(key, value).commit();
+        } catch (Throwable ignored) {
+        }
     }
 
     /**

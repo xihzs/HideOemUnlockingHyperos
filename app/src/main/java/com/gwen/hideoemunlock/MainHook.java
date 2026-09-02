@@ -1,6 +1,11 @@
 package com.gwen.hideoemunlock;
 
+import android.app.Application;
+import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,6 +23,7 @@ public class MainHook implements IXposedHookLoadPackage {
     public static final String PREF_NAME = "config";
     public static final String KEY_HIDE_OEM = "hide_oem_unlock";
     public static final String KEY_HIDE_MI_UNLOCK = "hide_mi_unlock";
+    public static final String PROVIDER_URI = "content://" + PACKAGE_NAME + ".provider";
 
     private static final String[] OEM_CONTROLLERS = {
             "com.android.settings.development.OemUnlockPreferenceController",
@@ -31,7 +37,12 @@ public class MainHook implements IXposedHookLoadPackage {
             "com.android.settings.development.FastbootUnlockStatusPreferenceController"
     };
 
+    private static Context sAppContext = null;
     private static XSharedPreferences sPrefs = null;
+
+    private static boolean sHideOemCached = true;
+    private static boolean sHideMiUnlockCached = true;
+    private static long sLastFetchTime = 0;
 
     private static synchronized XSharedPreferences getPrefs() {
         if (sPrefs == null) {
@@ -43,20 +54,67 @@ public class MainHook implements IXposedHookLoadPackage {
         return sPrefs;
     }
 
-    public static boolean isHideOemEnabled() {
-        try {
-            return getPrefs().getBoolean(KEY_HIDE_OEM, true);
-        } catch (Throwable t) {
-            return true;
+    public static synchronized void refreshConfig(Context context) {
+        long now = System.currentTimeMillis();
+        if (context == null) {
+            context = sAppContext;
+        } else {
+            sAppContext = context.getApplicationContext() != null ? context.getApplicationContext() : context;
         }
+
+        // Cache for 500ms to avoid high-frequency IPC on each layout pass
+        if (now - sLastFetchTime < 500) {
+            return;
+        }
+
+        // 1. Try ContentProvider query (Works across all Android versions & SELinux)
+        if (context != null) {
+            try {
+                ContentResolver resolver = context.getContentResolver();
+                if (resolver != null) {
+                    Bundle bundle = resolver.call(
+                            Uri.parse(PROVIDER_URI),
+                            ConfigProvider.METHOD_GET_CONFIG,
+                            null,
+                            null
+                    );
+                    if (bundle != null) {
+                        sHideOemCached = bundle.getBoolean(KEY_HIDE_OEM, true);
+                        sHideMiUnlockCached = bundle.getBoolean(KEY_HIDE_MI_UNLOCK, true);
+                        sLastFetchTime = now;
+                        Log.i(TAG, "Refreshed config via ContentProvider: HideOEM=" + sHideOemCached + ", HideMiUnlock=" + sHideMiUnlockCached);
+                        return;
+                    }
+                }
+            } catch (Throwable t) {
+                Log.d(TAG, "ContentProvider query failed: " + t.getMessage());
+            }
+        }
+
+        // 2. Try XSharedPreferences fallback
+        try {
+            XSharedPreferences xsp = getPrefs();
+            if (xsp.contains(KEY_HIDE_OEM) || xsp.contains(KEY_HIDE_MI_UNLOCK)) {
+                sHideOemCached = xsp.getBoolean(KEY_HIDE_OEM, true);
+                sHideMiUnlockCached = xsp.getBoolean(KEY_HIDE_MI_UNLOCK, true);
+                sLastFetchTime = now;
+                Log.i(TAG, "Refreshed config via XSharedPreferences: HideOEM=" + sHideOemCached + ", HideMiUnlock=" + sHideMiUnlockCached);
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+
+        sLastFetchTime = now;
+    }
+
+    public static boolean isHideOemEnabled() {
+        refreshConfig(sAppContext);
+        return sHideOemCached;
     }
 
     public static boolean isHideMiUnlockEnabled() {
-        try {
-            return getPrefs().getBoolean(KEY_HIDE_MI_UNLOCK, true);
-        } catch (Throwable t) {
-            return true;
-        }
+        refreshConfig(sAppContext);
+        return sHideMiUnlockCached;
     }
 
     @Override
@@ -98,7 +156,23 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     private void hookSettings(ClassLoader classLoader) {
-        // Layer 1: Hook Specific Controllers
+        // Capture Application context
+        try {
+            XposedHelpers.findAndHookMethod(
+                    Application.class,
+                    "onCreate",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            sAppContext = (Context) param.thisObject;
+                            refreshConfig(sAppContext);
+                        }
+                    }
+            );
+        } catch (Throwable ignored) {
+        }
+
+        // Layer 1: Hook Controllers
         for (String controllerName : OEM_CONTROLLERS) {
             hookController(classLoader, controllerName, MainHook::isHideOemEnabled);
         }
@@ -135,6 +209,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         new XC_MethodHook() {
                             @Override
                             protected void beforeHookedMethod(MethodHookParam param) {
+                                refreshConfig(extractContext(param.thisObject));
                                 if (toggleCheck.isEnabled()) {
                                     param.setResult(false);
                                 }
@@ -156,6 +231,7 @@ public class MainHook implements IXposedHookLoadPackage {
                             new XC_MethodHook() {
                                 @Override
                                 protected void afterHookedMethod(MethodHookParam param) {
+                                    refreshConfig(extractContext(param.thisObject));
                                     filterPreferenceGroup(param.args[0]);
                                 }
                             }
@@ -176,6 +252,7 @@ public class MainHook implements IXposedHookLoadPackage {
                             new XC_MethodHook() {
                                 @Override
                                 protected void afterHookedMethod(MethodHookParam param) {
+                                    refreshConfig(extractContext(param.thisObject));
                                     if (shouldHidePreference(param.args[0])) {
                                         hidePreferenceDirectly(param.args[0]);
                                     }
@@ -215,6 +292,7 @@ public class MainHook implements IXposedHookLoadPackage {
                                 @Override
                                 protected void beforeHookedMethod(MethodHookParam param) {
                                     Object pref = param.args[0];
+                                    refreshConfig(extractContext(pref));
                                     if (shouldHidePreference(pref)) {
                                         hidePreferenceDirectly(pref);
                                         param.setResult(false);
@@ -243,6 +321,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         new XC_MethodHook() {
                             @Override
                             protected void afterHookedMethod(MethodHookParam param) {
+                                refreshConfig(extractContext(param.thisObject));
                                 if (shouldHidePreference(param.thisObject)) {
                                     collapsePreferenceView(param.args[0]);
                                 }
@@ -283,6 +362,7 @@ public class MainHook implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
                     try {
+                        refreshConfig(extractContext(param.thisObject));
                         Object screen = XposedHelpers.callMethod(param.thisObject, "getPreferenceScreen");
                         if (screen != null) {
                             filterPreferenceGroup(screen);
@@ -306,7 +386,7 @@ public class MainHook implements IXposedHookLoadPackage {
             } catch (Throwable ignored) {
             }
 
-            // Hook displayResourcePreference or onCreatePreferences if available
+            // Hook setPreferenceScreen
             try {
                 XposedHelpers.findAndHookMethod(fragmentClass, "setPreferenceScreen", findPreferenceScreenClass(classLoader), fragmentFilterHook);
                 Log.i(TAG, "Hooked setPreferenceScreen on " + className);
@@ -403,7 +483,7 @@ public class MainHook implements IXposedHookLoadPackage {
                 Object pref = XposedHelpers.callMethod(group, "getPreference", i);
                 if (pref == null) continue;
 
-                // Check if this preference is itself a group (e.g. PreferenceCategory)
+                // Check if this preference is itself a group
                 try {
                     int childCount = (int) XposedHelpers.callMethod(pref, "getPreferenceCount");
                     if (childCount > 0) {
@@ -434,6 +514,22 @@ public class MainHook implements IXposedHookLoadPackage {
             Log.i(TAG, "Set preference visibility to false.");
         } catch (Throwable ignored) {
         }
+    }
+
+    private static Context extractContext(Object obj) {
+        if (obj == null) return sAppContext;
+        try {
+            if (obj instanceof Context) return (Context) obj;
+            Object ctx = XposedHelpers.callMethod(obj, "getContext");
+            if (ctx instanceof Context) return (Context) ctx;
+        } catch (Throwable ignored) {
+        }
+        try {
+            Object ctx = XposedHelpers.getObjectField(obj, "mContext");
+            if (ctx instanceof Context) return (Context) ctx;
+        } catch (Throwable ignored) {
+        }
+        return sAppContext;
     }
 
     private static Class<?> findPreferenceScreenClass(ClassLoader classLoader) {
