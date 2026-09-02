@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Hide OEM &amp; Mi Unlock</string>
+    <string name="module_title">Hide OEM &amp; Mi Unlock</string>
+    <string name="module_subtitle">LSPosed / Vector Module for Android &amp; HyperOS</string>
+    
+    <string name="status_active">Module is Activated</string>
+    <string name="status_active_desc">The hooks are loaded and active in Settings.</string>
+    
+    <string name="status_inactive">Module Not Activated</string>
+    <string name="status_inactive_desc">Please enable this module in LSPosed / Vector manager, ensure scope \'Settings (com.android.settings)\' is checked (enable \'Show system apps\'), and force-stop Settings.</string>
+    
+    <string name="section_config">Module Toggles</string>
+    <string name="toggle_hide_oem_title">Hide OEM Unlocking</string>
+    <string name="toggle_hide_oem_desc">Hides the standard OEM Unlocking toggle in Developer Options.</string>
+    
+    <string name="toggle_hide_mi_unlock_title">Hide Mi Unlock Status</string>
+    <string name="toggle_hide_mi_unlock_desc">Hides the Xiaomi / HyperOS Mi Unlock Status entry in Developer Options.</string>
+    
+    <string name="section_instructions">Setup Instructions</string>
+    <string name="step_1">1. Open LSPosed / Vector Manager.</string>
+    <string name="step_2">2. Go to Modules and enable \'Hide OEM &amp; Mi Unlock\'.</string>
+    <string name="step_3">3. Enable \'Show system apps\' and set scope to \'com.android.settings\'.</string>
+    <string name="step_4">4. Force-stop Settings or tap the button below.</string>
+    <string name="step_5">5. Open Developer Options to verify.</string>
+    
+    <string name="btn_open_dev_options">Open Developer Options</string>
+    <string name="btn_force_stop">Force Stop Settings (Root)</string>
+    <string name="pref_saved_notice">Settings saved. Force-stop Settings to apply.</string>
+</resources>
