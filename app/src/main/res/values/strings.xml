@@ -16,6 +16,9 @@
     <string name="toggle_hide_mi_unlock_title">Hide Mi Unlock Status</string>
     <string name="toggle_hide_mi_unlock_desc">Hides the Xiaomi / HyperOS Mi Unlock Status entry in Developer Options.</string>
     
+    <string name="toggle_hide_icon_title">Hide Launcher Icon</string>
+    <string name="toggle_hide_icon_desc">Hides the app icon from your launcher/app drawer. Open anytime via LSPosed Manager.</string>
+    
     <string name="section_instructions">Setup Instructions</string>
     <string name="step_1">1. Open LSPosed / Vector Manager.</string>
     <string name="step_2">2. Go to Modules and enable \'Hide OEM &amp; Mi Unlock\'.</string>
@@ -26,4 +29,6 @@
     <string name="btn_open_dev_options">Open Developer Options</string>
     <string name="btn_force_stop">Force Stop Settings (Root)</string>
     <string name="pref_saved_notice">Settings saved. Force-stop Settings to apply.</string>
+    <string name="icon_hidden_notice">App icon hidden. You can open the app from LSPosed Manager.</string>
+    <string name="icon_restored_notice">App icon restored to launcher.</string>
 </resources>

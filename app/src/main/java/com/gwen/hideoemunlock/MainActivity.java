@@ -1,8 +1,10 @@
 package com.gwen.hideoemunlock;
 
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Button;
@@ -23,10 +25,12 @@ public class MainActivity extends AppCompatActivity {
     public static final String PREF_NAME = "config";
     public static final String KEY_HIDE_OEM = "hide_oem_unlock";
     public static final String KEY_HIDE_MI_UNLOCK = "hide_mi_unlock";
+    public static final String KEY_HIDE_ICON = "hide_app_icon";
 
     private SharedPreferences mPrefs;
     private MaterialSwitch mSwitchOem;
     private MaterialSwitch mSwitchMiUnlock;
+    private MaterialSwitch mSwitchHideIcon;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
         TextView statusDesc = findViewById(R.id.tv_status_desc);
         mSwitchOem = findViewById(R.id.switch_hide_oem);
         mSwitchMiUnlock = findViewById(R.id.switch_hide_mi_unlock);
+        mSwitchHideIcon = findViewById(R.id.switch_hide_icon);
         Button btnOpenSettings = findViewById(R.id.btn_open_settings);
         Button btnForceStopSettings = findViewById(R.id.btn_force_stop_settings);
 
@@ -60,9 +65,11 @@ public class MainActivity extends AppCompatActivity {
         // Initialize Switches
         boolean hideOem = mPrefs.getBoolean(KEY_HIDE_OEM, true);
         boolean hideMiUnlock = mPrefs.getBoolean(KEY_HIDE_MI_UNLOCK, true);
+        boolean isIconHidden = isLauncherIconHidden();
 
         mSwitchOem.setChecked(hideOem);
         mSwitchMiUnlock.setChecked(hideMiUnlock);
+        mSwitchHideIcon.setChecked(isIconHidden);
 
         mSwitchOem.setOnCheckedChangeListener((buttonView, isChecked) -> {
             mPrefs.edit().putBoolean(KEY_HIDE_OEM, isChecked).commit();
@@ -76,6 +83,16 @@ public class MainActivity extends AppCompatActivity {
             saveToDeviceProtectedStorage(KEY_HIDE_MI_UNLOCK, isChecked);
             makePrefsWorldReadable();
             Toast.makeText(this, R.string.pref_saved_notice, Toast.LENGTH_SHORT).show();
+        });
+
+        mSwitchHideIcon.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            mPrefs.edit().putBoolean(KEY_HIDE_ICON, isChecked).commit();
+            setLauncherIconHidden(isChecked);
+            if (isChecked) {
+                Toast.makeText(this, R.string.icon_hidden_notice, Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(this, R.string.icon_restored_notice, Toast.LENGTH_SHORT).show();
+            }
         });
 
         makePrefsWorldReadable();
@@ -102,6 +119,32 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Root not available. Please force stop Settings manually in App Info", Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void setLauncherIconHidden(boolean hide) {
+        try {
+            ComponentName aliasComponent = new ComponentName(this, getPackageName() + ".LauncherAlias");
+            int newState = hide
+                    ? PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    : PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+
+            getPackageManager().setComponentEnabledSetting(
+                    aliasComponent,
+                    newState,
+                    PackageManager.DONT_KILL_APP
+            );
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private boolean isLauncherIconHidden() {
+        try {
+            ComponentName aliasComponent = new ComponentName(this, getPackageName() + ".LauncherAlias");
+            int state = getPackageManager().getComponentEnabledSetting(aliasComponent);
+            return state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private void saveToDeviceProtectedStorage(String key, boolean value) {
